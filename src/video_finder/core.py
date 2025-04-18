@@ -13,6 +13,7 @@ def find_similar_videos(
     hash_size=config.HASH_SIZE,
     cache_filename=config.DEFAULT_CACHE_FILENAME,
     max_workers=config.MAX_WORKERS,
+    recursive=False,
 ):
     """
     Finds groups of similar videos in a directory, using caching and parallel processing.
@@ -24,14 +25,15 @@ def find_similar_videos(
         hash_size (int): Size of the perceptual hash grid (e.g., 8 for 8x8).
         cache_filename (str): Base name of the cache file to use/create within the directory.
         max_workers (int): Maximum number of threads for parallel processing.
+        recursive (bool): Whether to scan subdirectories recursively.
 
     Returns:
         list: A list of tuples `(group_set, average_similarity)`, sorted by similarity descending.
               Each `group_set` contains absolute paths of similar videos.
               Returns an empty list if fewer than two videos are found or processed successfully.
     """
-    logging.info(f"Scanning directory: {directory}")
-    video_files = utils.get_video_files(directory)
+    logging.info(f"Scanning directory: {directory} (Recursive: {recursive})")
+    video_files = utils.get_video_files(directory, recursive=recursive)
     logging.info(f"Found {len(video_files)} potential video files.")
 
     if len(video_files) < 2:
@@ -187,6 +189,8 @@ def find_similar_videos(
     # The second element of each tuple is the average similarity
     grouped_videos_with_similarity.sort(key=lambda x: x[1], reverse=True)
 
-    logging.info(f"Found {len(grouped_videos_with_similarity)} groups of similar items.")
+    logging.info(
+        f"Found {len(grouped_videos_with_similarity)} groups of similar items."
+    )
 
     return grouped_videos_with_similarity
