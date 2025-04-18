@@ -55,6 +55,12 @@ def parse_arguments():
         help="Scan subdirectories recursively. If disabled, only scans the top-level directory.",
     )
     parser.add_argument(
+        "--skip-duration",
+        type=int,
+        default=config.DEFAULT_SKIP_DURATION_SECONDS,
+        help="Minimum video duration in seconds. Videos shorter than this will be skipped.",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",

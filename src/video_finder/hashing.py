@@ -3,12 +3,16 @@ import cv2
 import imagehash
 import numpy as np
 from PIL import Image
+import os
 
 from . import config  # Relative import
 
 
 def calculate_video_hashes(
-    video_path, num_frames=config.NUM_FRAMES_TO_SAMPLE, hash_size=config.HASH_SIZE
+    video_path,
+    num_frames=config.NUM_FRAMES_TO_SAMPLE,
+    hash_size=config.HASH_SIZE,
+    skip_duration=config.DEFAULT_SKIP_DURATION_SECONDS,
 ):
     """
     Extracts frames from a video and calculates their average hashes.
@@ -26,14 +30,13 @@ def calculate_video_hashes(
         fps = cap.get(cv2.CAP_PROP_FPS)
         duration = total_frames / fps if fps and fps > 0 else 0
 
-        if (
-            total_frames < num_frames or duration < 1
-        ):  # Skip very short or invalid videos
-            logging.debug(  
-                f"Skipping too short or invalid video: {video_path} (Frames: {total_frames}, Duration: {duration:.2f}s)"
+        # --- Combined check for skipping based on duration or frame count ---
+        if duration < skip_duration or total_frames < num_frames:
+            logging.info(
+                f"Skipping video: {os.path.basename(video_path)} (Duration: {duration:.2f}s < {skip_duration}s or Frames: {total_frames} < {num_frames})"
             )
             cap.release()
-            return []  # Return empty list, not None, to distinguish from open errors
+            return []  # Return empty list for intentionally skipped videos
 
         frame_hashes = []
         # Ensure indices are within bounds

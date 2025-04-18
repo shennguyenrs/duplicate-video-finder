@@ -14,6 +14,7 @@ def find_similar_videos(
     cache_filename=config.DEFAULT_CACHE_FILENAME,
     max_workers=config.MAX_WORKERS,
     recursive=False,
+    skip_duration=config.DEFAULT_SKIP_DURATION_SECONDS,
 ):
     """
     Finds groups of similar videos in a directory, using caching and parallel processing.
@@ -63,7 +64,11 @@ def find_similar_videos(
             for video_path in videos_to_process:
                 # Submit the hashing task
                 future = executor.submit(
-                    hashing.calculate_video_hashes, video_path, num_frames, hash_size
+                    hashing.calculate_video_hashes,
+                    video_path,
+                    num_frames,
+                    hash_size,
+                    skip_duration,
                 )
                 futures[future] = video_path  # Map future back to video path
 

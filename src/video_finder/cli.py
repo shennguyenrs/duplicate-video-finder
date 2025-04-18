@@ -26,6 +26,7 @@ def main():
     print(f"Similarity threshold: {args.threshold}%")
     print(f"Frames sampled per video: {args.frames}")
     print(f"Hash size: {args.hash_size}x{args.hash_size}")
+    print(f"Skip duration: {args.skip_duration} seconds")
     cache_path_display = os.path.join(target_directory, args.cache_file + ".db")
     print(f"Using cache file: ~{cache_path_display}")
     print(f"Max workers: {args.workers}")
@@ -43,7 +44,8 @@ def main():
             hash_size=args.hash_size,
             cache_filename=args.cache_file,
             max_workers=args.workers,
-            recursive=args.recursive,  # Pass the recursive flag
+            recursive=args.recursive,
+            skip_duration=args.skip_duration,
         )
     except Exception as e:
         logging.exception(f"An unexpected error occurred during processing: {e}")
