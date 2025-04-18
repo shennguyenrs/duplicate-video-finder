@@ -2,10 +2,12 @@ import logging
 import os
 import shutil
 
+from .. import config
 
-def move_duplicate_files(groups, base_directory, duplicate_subdir="duplicate_videos"):
+
+def move_duplicate_files(groups, base_directory, duplicate_subdir=config.DEFAULT_DUPLICATE_DIR_NAME):
     """
-    Moves duplicate files (all but one from each group) into a specified subdirectory.
+    Moves duplicate files into a specified subdirectory.
 
     Args:
         groups (list): List of tuples `(group_set, average_similarity)`.
@@ -35,16 +37,14 @@ def move_duplicate_files(groups, base_directory, duplicate_subdir="duplicate_vid
         if len(group) < 2:
             continue  # Should not happen based on grouping logic, but check
 
-        # Sort group alphabetically by path to consistently choose which file to keep
+        # Sort group alphabetically by path for deterministic processing order
         sorted_group = sorted(list(group))
-        file_to_keep = sorted_group[0]
-        files_to_move = sorted_group[1:]
-
         logging.info(
-            f"Group (Avg Sim: {avg_similarity:.2f}%): Keeping '{os.path.basename(file_to_keep)}'"
+            f"Processing group with {len(group)} files (Avg Sim: {avg_similarity:.2f}%) for moving."
         )
 
-        for file_path in files_to_move:
+        # Iterate over ALL files in the group to move them
+        for file_path in sorted_group:
             base_name = os.path.basename(file_path)
             dest_path = os.path.join(duplicate_dir_path, base_name)
 

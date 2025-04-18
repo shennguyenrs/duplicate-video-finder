@@ -116,7 +116,7 @@ def main():
                 f"Found {num_duplicates_to_move} duplicate file(s) across {len(similar_video_groups)} groups."
             )
             confirm = input(
-                "Proceed with moving duplicates to 'duplicate_videos' subdirectory? [y/N]: "
+                f"Proceed with moving duplicates to '{config.DEFAULT_DUPLICATE_DIR_NAME}' subdirectory? [y/N]: "
             )
             if confirm.lower() == "y":
                 print("Moving duplicates...")
