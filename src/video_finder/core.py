@@ -26,7 +26,8 @@ def find_similar_videos(
         max_workers (int): Maximum number of threads for parallel processing.
 
     Returns:
-        list: A list of sets, where each set contains absolute paths of similar videos.
+        list: A list of tuples `(group_set, average_similarity)`, sorted by similarity descending.
+              Each `group_set` contains absolute paths of similar videos.
               Returns an empty list if fewer than two videos are found or processed successfully.
     """
     logging.info(f"Scanning directory: {directory}")
@@ -136,7 +137,8 @@ def find_similar_videos(
     logging.info(
         f"Comparing {len(valid_videos)} videos ({len(list(itertools.combinations(valid_videos, 2)))} pairs)..."
     )
-    similar_pairs = []
+    # Store pairs along with their similarity score
+    similar_pairs_with_scores = []
     compared_count = 0
     total_comparisons = len(valid_videos) * (len(valid_videos) - 1) // 2
     if total_comparisons == 0:  # Handle case with exactly 2 valid videos
@@ -158,10 +160,10 @@ def find_similar_videos(
         # Pass hash_size for correct normalization in compare_hashes
         similarity = hashing.compare_hashes(hashes1, hashes2, hash_size=hash_size)
 
-        # If similarity meets the threshold, record the pair
+        # If similarity meets the threshold, record the pair and its score
         if similarity >= similarity_threshold:
-            # Store as a sorted tuple to ensure consistency regardless of order
-            similar_pairs.append(tuple(sorted((video1, video2))))
+            # Store the pair and its similarity score
+            similar_pairs_with_scores.append((video1, video2, similarity))
             logging.debug(  # Use debug for individual pair findings
                 f"Found similar pair: {os.path.basename(video1)} and {os.path.basename(video2)} (Similarity: {similarity:.2f}%)"
             )
@@ -172,11 +174,19 @@ def find_similar_videos(
             logging.info(f"Compared {compared_count}/{total_comparisons} pairs...")
 
     logging.info(
-        f"Found {len(similar_pairs)} similar pairs above {similarity_threshold}% threshold."
+        f"Found {len(similar_pairs_with_scores)} similar pairs above {similarity_threshold}% threshold."
     )
 
     # --- Step 5: Group Similar Videos ---
-    # Use the utility function for grouping
-    similar_groups = utils.group_similar_items(similar_pairs)
+    # Pass pairs with scores to the grouping function
+    grouped_videos_with_similarity = utils.group_similar_items(
+        similar_pairs_with_scores
+    )
 
-    return similar_groups
+    # --- Step 6: Sort Groups by Average Similarity (Descending) ---
+    # The second element of each tuple is the average similarity
+    grouped_videos_with_similarity.sort(key=lambda x: x[1], reverse=True)
+
+    logging.info(f"Found {len(grouped_videos_with_similarity)} groups of similar items.")
+
+    return grouped_videos_with_similarity

@@ -1,8 +1,9 @@
+import itertools
 import logging
 import os
 from collections import defaultdict
 
-from . import config  # Use relative import for config
+from . import config
 
 
 def get_video_files(directory):
@@ -38,30 +39,38 @@ def human_readable_size(size_bytes):
     return f"{size_bytes_num:.2f} {size_name[i]}"
 
 
-def group_similar_items(item_pairs):
+def group_similar_items(item_pairs_with_similarity):
     """
-    Groups items based on similarity pairs.
+    Groups items based on similarity pairs and calculates average similarity for each group.
 
     Args:
-        item_pairs (list): A list of tuples, where each tuple represents
-                           a pair of similar items (e.g., [(item1, item2), (item2, item3)]).
+        item_pairs_with_similarity (list): A list of tuples, where each tuple represents
+                           a pair of similar items and their similarity score
+                           (e.g., [(item1, item2, 95.5), (item2, item3, 98.0)]).
 
     Returns:
-        list: A list of sets, where each set contains grouped similar items.
+        list: A list of tuples `(group_set, average_similarity)`, where each `group_set`
+              contains grouped similar items and `average_similarity` is the mean
+              similarity of pairs *within* that group.
     """
-    if not item_pairs:
+    if not item_pairs_with_similarity:
         return []
 
-    logging.info("Grouping similar items...")
+    logging.info("Grouping similar items and calculating average similarity...")
     adj = defaultdict(list)
     all_items = set()
-    for u, v in item_pairs:
+    # Store similarities for easy lookup, using sorted tuples as keys
+    pair_similarities = {}
+    for u, v, similarity in item_pairs_with_similarity:
         adj[u].append(v)
         adj[v].append(u)
         all_items.add(u)
         all_items.add(v)
+        # Ensure consistent key order for lookup
+        pair_key = tuple(sorted((u, v)))
+        pair_similarities[pair_key] = similarity
 
-    groups = []
+    groups_with_similarity = []
     visited = set()
 
     for item in all_items:
@@ -77,23 +86,46 @@ def group_similar_items(item_pairs):
                     if neighbor not in visited:
                         visited.add(neighbor)
                         q.append(neighbor)
-            # Only add groups with more than one item (actual duplicates/similars)
+
+            # Only process groups with more than one item (actual duplicates/similars)
             if len(current_group) > 1:
-                groups.append(current_group)
+                group_similarity_sum = 0.0
+                group_pair_count = 0
+                # Iterate through all unique pairs within the found group
+                for item_a, item_b in itertools.combinations(current_group, 2):
+                    pair_key = tuple(sorted((item_a, item_b)))
+                    # Check if this pair was one of the original similar pairs
+                    if pair_key in pair_similarities:
+                        group_similarity_sum += pair_similarities[pair_key]
+                        group_pair_count += 1
 
-    logging.info(f"Found {len(groups)} groups of similar items.")
-    return groups
+                average_similarity = 0.0
+                if group_pair_count > 0:
+                    average_similarity = group_similarity_sum / group_pair_count
+                else:
+                    # This case should ideally not happen for groups > 1 derived
+                    # from pairs, but handle defensively. Could happen if a group
+                    # is formed transitively but no direct pairs within it met the threshold.
+                    logging.warning(f"Group {current_group} has no internal pairs meeting threshold? Assigning 0 similarity.")
+
+                groups_with_similarity.append((current_group, average_similarity))
 
 
-def print_similar_video_groups(similar_video_groups):
-    """Prints the groups of similar videos with their sizes."""
+    logging.info(f"Found {len(groups_with_similarity)} groups of similar items.")
+    # Sorting is now done in core.py after this function returns
+    return groups_with_similarity
+
+
+def print_similar_video_groups(grouped_videos_with_similarity):
+    """Prints the groups of similar videos with their sizes and average similarity."""
     print("-" * 30)
-    if not similar_video_groups:
+    if not grouped_videos_with_similarity:
         print("No similar video groups found.")
     else:
-        print(f"Found {len(similar_video_groups)} groups of similar videos:")
-        for i, group in enumerate(similar_video_groups):
-            print(f"\nGroup {i + 1}:")
+        print(f"Found {len(grouped_videos_with_similarity)} groups of similar videos (sorted by similarity):")
+        # Input is now a list of tuples: (group_set, average_similarity)
+        for i, (group, avg_similarity) in enumerate(grouped_videos_with_similarity):
+            print(f"\nGroup {i + 1} (Average Similarity: {avg_similarity:.2f}%):")
             # Sort paths within the group for consistent display
             sorted_group = sorted(list(group))
             for video_path in sorted_group:
