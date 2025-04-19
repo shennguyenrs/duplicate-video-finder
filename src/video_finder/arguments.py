@@ -7,21 +7,35 @@ from . import config
 def parse_arguments():
     """Parses command-line arguments for the video finder."""
     parser = argparse.ArgumentParser(
-        description="Find similar video files in a directory based on perceptual hashing. Can optionally filter against a watched videos database.",
+        description=(
+            "Find similar/duplicate video files in a directory based on perceptual hashing (standard mode), "
+            "or populate a watched videos database from a source directory (--create-watched-db-from mode)."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    # --- Core Scan Arguments ---
-    core_group = parser.add_argument_group("Core Scan Options")
-    core_group.add_argument(
-        "directory", help="The path to the directory containing video files to scan."
+    # --- Mode Selection (Mutually Exclusive) ---
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        "directory",
+        nargs="?",  # Optional because it's mutually exclusive
+        help="Standard Mode: Path to the directory containing video files to scan for duplicates/watched.",
     )
+    mode_group.add_argument(
+        "--create-watched-db-from",
+        metavar="<source_directory>",
+        dest="create_watched_source",  # Use a distinct destination variable
+        help="Create/Update Mode: Path to a directory whose video files should ALL be added to the watched database.",
+    )
+
+    # --- Core Scan Arguments (Applicable to both modes for hashing consistency) ---
+    core_group = parser.add_argument_group("Core Hashing Options (used in both modes)")
     core_group.add_argument(
         "-t",
         "--threshold",
         type=float,
         default=config.DEFAULT_THRESHOLD,
-        help="Similarity threshold percentage (0-100). Pairs above this are considered similar.",
+        help="Similarity threshold percentage (0-100). Used in standard mode to find similar videos.",
     )
     core_group.add_argument(
         "-f",
@@ -41,7 +55,7 @@ def parse_arguments():
         "-c",
         "--cache-file",
         default=config.DEFAULT_CACHE_FILENAME,
-        help="Base name for the hash cache file (will be stored in the target directory).",
+        help="Base name for the hash cache file (will be stored in the scanned directory).",
     )
     core_group.add_argument(
         "-w",
@@ -65,20 +79,21 @@ def parse_arguments():
     )
 
     # --- Watched Videos Arguments ---
-    watched_group = parser.add_argument_group("Watched Video Options")
+    watched_group = parser.add_argument_group(
+        "Watched Video Options (Standard Mode & Create Mode)"
+    )
     watched_group.add_argument(
         "--watched-db",
         type=str,
         default=None,
         metavar="<path>",
-        help=f"Path to the watched videos database file (e.g., '{config.DEFAULT_WATCHED_DB_FILENAME}'). If provided, videos matching hashes in this DB will be identified as 'watched'.",
+        help=(
+            f"Path to the watched videos database file (e.g., '{config.DEFAULT_WATCHED_DB_FILENAME}'). "
+            "In Standard Mode: Used to identify watched videos. "
+            "In Create Mode: Specifies the database file to create/update (defaults to <source_directory>/.watched_videos.db if omitted)."
+        ),
     )
-    watched_group.add_argument(
-        "--update-watched-db",
-        action="store_true",
-        default=False,
-        help="If --watched-db is provided, update the database with hashes of unique, unwatched videos found during this scan.",
-    )
+    # --update-watched-db flag removed. Update is now automatic in standard mode if --watched-db is provided.
 
     # --- General Arguments ---
     general_group = parser.add_argument_group("General Options")
@@ -92,10 +107,11 @@ def parse_arguments():
     args = parser.parse_args()
 
     # --- Argument Validation ---
-    if args.update_watched_db and not args.watched_db:
-        parser.error("--update-watched-db requires --watched-db to be specified.")
 
-    # Validate threshold range
+    # Mode-specific validations
+    # (Validation for --update-watched-db removed)
+
+    # General validations (apply to both modes where relevant)
     if not 0 <= args.threshold <= 100:
         parser.error(f"Threshold must be between 0 and 100, got {args.threshold}")
 
