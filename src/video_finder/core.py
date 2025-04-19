@@ -6,40 +6,40 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from . import cache_manager, config, hashing, utils
 
 
-def find_similar_videos(
+def calculate_all_hashes(
     directory,
-    similarity_threshold=config.DEFAULT_THRESHOLD,
+    recursive=False,
+    cache_filename=config.DEFAULT_CACHE_FILENAME,
     num_frames=config.NUM_FRAMES_TO_SAMPLE,
     hash_size=config.HASH_SIZE,
-    cache_filename=config.DEFAULT_CACHE_FILENAME,
-    max_workers=config.MAX_WORKERS,
-    recursive=False,
     skip_duration=config.DEFAULT_SKIP_DURATION_SECONDS,
+    max_workers=config.MAX_WORKERS,
 ):
     """
-    Finds groups of similar videos in a directory, using caching and parallel processing.
+    Calculates or retrieves from cache the hashes for all valid video files
+    in the specified directory.
 
     Args:
         directory (str): The path to the directory to scan.
-        similarity_threshold (float): Percentage (0-100). Pairs above this are considered similar.
-        num_frames (int): Number of frames to sample per video.
-        hash_size (int): Size of the perceptual hash grid (e.g., 8 for 8x8).
-        cache_filename (str): Base name of the cache file to use/create within the directory.
-        max_workers (int): Maximum number of threads for parallel processing.
         recursive (bool): Whether to scan subdirectories recursively.
+        cache_filename (str): Base name of the cache file.
+        num_frames (int): Number of frames to sample per video.
+        hash_size (int): Size of the perceptual hash grid.
+        skip_duration (int): Minimum video duration in seconds to process.
+        max_workers (int): Maximum number of threads for parallel processing.
 
     Returns:
-        list: A list of tuples `(group_set, average_similarity)`, sorted by similarity descending.
-              Each `group_set` contains absolute paths of similar videos.
-              Returns an empty list if fewer than two videos are found or processed successfully.
+        dict: A dictionary mapping absolute video file paths to a list of their
+              calculated hash objects. Returns an empty dict if no videos found
+              or processed.
     """
     logging.info(f"Scanning directory: {directory} (Recursive: {recursive})")
     video_files = utils.get_video_files(directory, recursive=recursive)
     logging.info(f"Found {len(video_files)} potential video files.")
 
-    if len(video_files) < 2:
-        logging.info("Need at least two videos to compare.")
-        return []
+    if not video_files:
+        logging.info("No video files found in the specified directory.")
+        return {}
 
     # --- Step 1: Load Cache & Determine Videos to Process ---
     cache_path = cache_manager.get_cache_path(directory, cache_filename)
@@ -132,46 +132,134 @@ def find_similar_videos(
     if newly_cached_hashes:
         cache_manager.update_cache(cache_path, newly_cached_hashes)
 
-    # --- Step 4: Compare Video Pairs ---
-    # Get list of videos that have valid hashes (either from cache or newly calculated)
-    valid_videos = list(video_hashes.keys())
-    logging.info(f"Total videos with valid hashes: {len(valid_videos)}")
+    logging.info(f"Total videos with valid hashes: {len(video_hashes)}")
+    return video_hashes
 
-    if len(valid_videos) < 2:
-        logging.info("Not enough videos with valid hashes to compare.")
-        return []
+
+def identify_watched_videos(
+    video_hashes_map, watched_hashes_set, hash_size, similarity_threshold
+):
+    """
+    Identifies videos whose hashes match any hash in the watched set.
+
+    Args:
+        video_hashes_map (dict): {video_path: [hash_obj, ...]}.
+        watched_hashes_set (set): A set of watched hash strings.
+        hash_size (int): Size of the perceptual hash grid (used for comparison).
+        similarity_threshold (float): Percentage (0-100).
+
+    Returns:
+        tuple: (
+            list: watched_paths_list - Absolute paths of videos considered watched.
+            dict: unwatched_hashes_dict - {video_path: [hash_obj, ...]} for non-watched videos.
+        )
+    """
+    watched_paths = []
+    unwatched_hashes = {}
+    count = 0
+    total = len(video_hashes_map)
+
+    if not watched_hashes_set:
+        logging.info(
+            "No watched hashes provided, skipping watched video identification."
+        )
+        # If no watched hashes, all videos are considered unwatched
+        return [], video_hashes_map
 
     logging.info(
-        f"Comparing {len(valid_videos)} videos ({len(list(itertools.combinations(valid_videos, 2)))} pairs)..."
+        f"Comparing {total} videos against {len(watched_hashes_set)} watched hashes..."
     )
-    # Store pairs along with their similarity score
+
+    for video_path, hashes_list in video_hashes_map.items():
+        count += 1
+        is_watched = False
+        if not hashes_list:  # Skip if a video somehow has no hashes
+            continue
+
+        # Compare each hash of the video against each hash in the watched set
+        for video_hash in hashes_list:
+            for watched_hash in watched_hashes_set:
+                similarity = hashing.compare_hashes(
+                    [video_hash], [watched_hash], hash_size
+                )  # Compare single hash pair
+
+                if similarity >= similarity_threshold:
+                    is_watched = True
+                    logging.debug(
+                        f"Video '{os.path.basename(video_path)}' matched watched hash. Similarity: {similarity:.2f}%"
+                    )
+                    break  # Stop comparing hashes for this video
+            if is_watched:
+                break  # Stop checking hashes in watched_hashes_set
+
+        if is_watched:
+            watched_paths.append(video_path)
+        else:
+            unwatched_hashes[video_path] = hashes_list
+
+        if count % 100 == 0 or count == total:
+            logging.info(f"Checked {count}/{total} videos against watched database.")
+
+    logging.info(f"Identified {len(watched_paths)} watched videos.")
+    return watched_paths, unwatched_hashes
+
+
+def find_similar_groups(video_hashes_map, hash_size, similarity_threshold):
+    """
+    Finds groups of similar videos based on their hashes.
+
+    Args:
+        video_hashes_map (dict): {video_path: [hash_obj, ...]}. Typically contains
+                                 only unwatched videos if filtering was applied.
+        hash_size (int): Size of the perceptual hash grid.
+        similarity_threshold (float): Percentage (0-100). Pairs above this are similar.
+
+    Returns:
+        list: A list of tuples `(group_set, average_similarity)`, sorted by similarity descending.
+              Each `group_set` contains absolute paths of similar videos.
+              Returns an empty list if fewer than two videos are provided or no similar pairs found.
+    """
+    valid_videos = list(video_hashes_map.keys())
+    logging.info(f"Comparing {len(valid_videos)} videos for duplicates...")
+
+    if len(valid_videos) < 2:
+        logging.info(
+            "Need at least two videos with valid hashes to compare for duplicates."
+        )
+        return []
+
+    total_comparisons = len(valid_videos) * (len(valid_videos) - 1) // 2
+    if (
+        total_comparisons == 0 and len(valid_videos) == 2
+    ):  # Handle case with exactly 2 valid videos
+        total_comparisons = 1
+    elif total_comparisons == 0:
+        logging.info("No pairs to compare.")
+        return []
+
+    logging.info(f"Comparing {total_comparisons} pairs...")
     similar_pairs_with_scores = []
     compared_count = 0
-    total_comparisons = len(valid_videos) * (len(valid_videos) - 1) // 2
-    if total_comparisons == 0:  # Handle case with exactly 2 valid videos
-        total_comparisons = 1
 
     # Iterate through all unique pairs of videos with valid hashes
     for video1, video2 in itertools.combinations(valid_videos, 2):
-        # Hashes should exist if they are in valid_videos, but double-check defensively
-        if video1 not in video_hashes or video2 not in video_hashes:
+        # Hashes should exist, but double-check defensively
+        if video1 not in video_hashes_map or video2 not in video_hashes_map:
             logging.warning(
                 f"Missing hashes for comparison pair (should not happen): {os.path.basename(video1)}, {os.path.basename(video2)}"
             )
             continue  # Skip this pair
 
-        hashes1 = video_hashes[video1]
-        hashes2 = video_hashes[video2]
+        hashes1 = video_hashes_map[video1]
+        hashes2 = video_hashes_map[video2]
 
         # Perform the comparison using the hashing utility function
-        # Pass hash_size for correct normalization in compare_hashes
         similarity = hashing.compare_hashes(hashes1, hashes2, hash_size=hash_size)
 
         # If similarity meets the threshold, record the pair and its score
         if similarity >= similarity_threshold:
-            # Store the pair and its similarity score
             similar_pairs_with_scores.append((video1, video2, similarity))
-            logging.debug(  # Use debug for individual pair findings
+            logging.debug(
                 f"Found similar pair: {os.path.basename(video1)} and {os.path.basename(video2)} (Similarity: {similarity:.2f}%)"
             )
 
@@ -184,14 +272,16 @@ def find_similar_videos(
         f"Found {len(similar_pairs_with_scores)} similar pairs above {similarity_threshold}% threshold."
     )
 
-    # --- Step 5: Group Similar Videos ---
-    # Pass pairs with scores to the grouping function
+    if not similar_pairs_with_scores:
+        logging.info("No similar pairs found.")
+        return []
+
+    # --- Group Similar Videos ---
     grouped_videos_with_similarity = utils.group_similar_items(
         similar_pairs_with_scores
     )
 
-    # --- Step 6: Sort Groups by Average Similarity (Descending) ---
-    # The second element of each tuple is the average similarity
+    # --- Sort Groups by Average Similarity (Descending) ---
     grouped_videos_with_similarity.sort(key=lambda x: x[1], reverse=True)
 
     logging.info(
