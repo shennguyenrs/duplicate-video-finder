@@ -62,7 +62,40 @@ def run_find_similar(args):
         if args.watched_db:
             print("-" * 30)
             print(f"Loading watched database: {args.watched_db}")
-            watched_hashes_set = watched_db_manager.load_watched_hashes(args.watched_db)
+            # Load hashes AND metadata
+            watched_hashes_set, db_metadata = watched_db_manager.load_watched_hashes(
+                args.watched_db
+            )
+
+            # --- Parameter Validation ---
+            if db_metadata:
+                db_frames = db_metadata.get("num_frames")
+                db_hash_size = db_metadata.get("hash_size")
+
+                # Check for mismatch only if metadata values exist
+                mismatch = False
+                error_msg = "Error: Watched DB parameters mismatch."
+                if db_frames is not None and db_frames != args.frames:
+                    error_msg += f"\n - DB uses --frames={db_frames}, current run uses --frames={args.frames}."
+                    mismatch = True
+                if db_hash_size is not None and db_hash_size != args.hash_size:
+                    error_msg += f"\n - DB uses --hash-size={db_hash_size}, current run uses --hash-size={args.hash_size}."
+                    mismatch = True
+
+                if mismatch:
+                    error_msg += (
+                        "\nParameters must match for valid comparison. Exiting."
+                    )
+                    logging.error(error_msg)
+                    print(error_msg)  # Also print to console
+                    sys.exit(1)
+                else:
+                    logging.info("Watched DB parameters match current run parameters.")
+            elif watched_hashes_set:  # Only warn if DB exists but has no metadata
+                warn_msg = "Warning: Could not find hashing parameters (metadata) in the watched DB. Parameter consistency cannot be guaranteed. Ensure current settings match DB creation settings."
+                logging.warning(warn_msg)
+                print(warn_msg)
+            # --- End Parameter Validation ---
 
             if watched_hashes_set:
                 print(
@@ -207,10 +240,14 @@ def run_find_similar(args):
 
                 if hashes_to_add:
                     print(
-                        f"Adding {len(hashes_to_add)} unique hashes to the watched database..."
+                        f"Adding {len(hashes_to_add)} unique hashes and metadata to the watched database..."
                     )
+                    # Add hashes and metadata to the database
                     watched_db_manager.add_hashes_to_watched_db(
-                        args.watched_db, hashes_to_add
+                        db_path=args.watched_db,
+                        new_hashes_set=hashes_to_add,
+                        num_frames=args.frames,
+                        hash_size=args.hash_size,
                     )
                 else:
                     print(

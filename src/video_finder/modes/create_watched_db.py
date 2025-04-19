@@ -66,8 +66,13 @@ def run_create_watched_db(args):
         )
         print(f"Adding hashes to watched database: {abs_db_path_to_use}")
 
-        # Add hashes to the database
-        watched_db_manager.add_hashes_to_watched_db(abs_db_path_to_use, all_hashes_set)
+        # Add hashes to the database, including metadata
+        watched_db_manager.add_hashes_to_watched_db(
+            db_path=abs_db_path_to_use,
+            new_hashes_set=all_hashes_set,
+            num_frames=args.frames,
+            hash_size=args.hash_size,
+        )
 
         print("Watched database update complete.")
 

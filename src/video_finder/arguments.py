@@ -25,11 +25,19 @@ def parse_arguments():
         "--create-watched-db-from",
         metavar="<source_directory>",
         dest="create_watched_source",  # Use a distinct destination variable
-        help="Create/Update Mode: Path to a directory whose video files should ALL be added to the watched database.",
+        help="Create Mode: Path to a directory whose video files should ALL be added to the watched database.",
+    )
+    mode_group.add_argument(
+        "--inspect-db",
+        metavar="<db_path>",
+        help="Inspect Mode: Show parameters and hash count stored in a watched database file. Does not perform scanning.",
     )
 
     # --- Core Scan Arguments (Applicable to both modes for hashing consistency) ---
-    core_group = parser.add_argument_group("Core Hashing Options (used in both modes)")
+    # Note: These are not used by --inspect-db mode but are kept separate for clarity.
+    core_group = parser.add_argument_group(
+        "Core Hashing Options (used in find/create modes)"
+    )
     core_group.add_argument(
         "-t",
         "--threshold",
@@ -93,7 +101,6 @@ def parse_arguments():
             "In Create Mode: Specifies the database file to create/update (defaults to <source_directory>/.watched_videos.db if omitted)."
         ),
     )
-    # --update-watched-db flag removed. Update is now automatic in standard mode if --watched-db is provided.
 
     # --- General Arguments ---
     general_group = parser.add_argument_group("General Options")
@@ -109,7 +116,6 @@ def parse_arguments():
     # --- Argument Validation ---
 
     # Mode-specific validations
-    # (Validation for --update-watched-db removed)
 
     # General validations (apply to both modes where relevant)
     if not 0 <= args.threshold <= 100:

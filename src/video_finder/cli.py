@@ -13,17 +13,22 @@ def main():
     args = arguments.parse_arguments()
 
     # --- Mode Selection Logic ---
-    if args.create_watched_source:
-        modes.run_create_watched_db(args)  # Call via the modes package
+    if args.inspect_db:
+        modes.run_inspect_db(args)  # Call inspect mode
+    elif args.create_watched_source:
+        modes.run_create_watched_db(args)  # Call create mode
+    elif args.directory:
+        # 'directory' is the default positional argument for find_similar mode
+        modes.run_find_similar(args)  # Call find similar mode
     else:
-        # Ensure 'directory' argument is present for this mode
-        if args.directory is None:
-            logging.error(
-                "Error: The 'directory' argument is required for find similar/watched mode."
-            )
-            # Consider printing usage help here if possible/desired
-            sys.exit(1)
-        modes.run_find_similar(args)  # Call via the modes package
+        # This case should ideally not be reachable if argparse is set up correctly
+        # with mutually exclusive groups and required flags/positionals.
+        logging.error(
+            "Error: No valid operation mode selected or required arguments missing."
+        )
+        # Consider printing parser help here
+        arguments.parser.print_help()  # Assuming parser is accessible
+        sys.exit(1)
 
 
 # --- Entry Point ---
