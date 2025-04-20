@@ -19,19 +19,19 @@ def run_inspect_db(args):
     # the case where the file (or its .db/.dat variants) doesn't exist.
 
     try:
-        # Load hashes and metadata using the absolute path
+        # Load video data and metadata using the absolute path
         # Pass the absolute path to the manager function
-        watched_hashes_set, db_metadata = watched_db_manager.load_watched_hashes(
+        watched_videos_dict, db_metadata = watched_db_manager.load_watched_videos_data(
             abs_db_path  # Pass the absolute path
         )
 
-        # load_watched_hashes logs if the file is not found or cannot be opened,
+        # load_watched_videos_data logs if the file is not found or cannot be opened,
         # so we just report the results it returned.
 
-        print(f"Total unique hashes stored: {len(watched_hashes_set)}")
+        print(f"Total videos stored: {len(watched_videos_dict)}")
 
         if db_metadata:
-            print("Hashing Parameters Found:")
+            print("Hashing Parameters Found (apply to all entries):")
             print(
                 f"  - Frames sampled per video: {db_metadata.get('num_frames', 'N/A')}"
             )

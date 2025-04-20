@@ -48,30 +48,40 @@ def run_create_watched_db(args):
             print("No video files found or processed in the source directory.")
             return  # Exit cleanly
 
-        # Collect all unique hashes
-        all_hashes_set = set()
-        for hashes_list in all_video_hashes.values():
-            if hashes_list:
-                all_hashes_set.update(str(h) for h in hashes_list)
-
-        if not all_hashes_set:
-            print("No valid hashes generated from the videos found.")
-            return  # Exit cleanly
-
         print(
-            f"Found {len(all_video_hashes)} videos, generating {len(all_hashes_set)} unique hashes."
+            f"Found {len(all_video_hashes)} videos to process for the watched database."
         )
-        print(f"Adding hashes to watched database: {abs_db_path_to_use}")
+        print(f"Adding/updating entries in watched database: {abs_db_path_to_use}")
 
-        # Add hashes to the database, including metadata
-        watched_db_manager.add_hashes_to_watched_db(
-            db_path=abs_db_path_to_use,
-            new_hashes_set=all_hashes_set,
-            num_frames=args.frames,
-            hash_size=args.hash_size,
-        )
+        # Iterate through each video and its hashes, adding them individually
+        processed_count = 0
+        total_videos = len(all_video_hashes)
+        for video_path, hashes_list in all_video_hashes.items():
+            processed_count += 1
+            if not hashes_list:
+                logging.warning(
+                    f"No hashes generated for video '{video_path}', skipping database entry."
+                )
+                continue
 
-        print("Watched database update complete.")
+            # Convert hash objects to a set of strings for this video
+            video_hashes_set_str = {str(h) for h in hashes_list}
+
+            # Add this video's entry to the database
+            watched_db_manager.add_video_to_watched_db(
+                db_path=abs_db_path_to_use,
+                video_identifier=video_path,  # Use the absolute path as identifier
+                video_hashes_set=video_hashes_set_str,
+                num_frames=args.frames,
+                hash_size=args.hash_size,
+            )
+
+            if processed_count % 50 == 0 or processed_count == total_videos:
+                logging.info(
+                    f"Processed {processed_count}/{total_videos} videos for watched database."
+                )
+
+        print("Watched database creation/update complete.")
 
     except Exception as e:
         logging.exception(

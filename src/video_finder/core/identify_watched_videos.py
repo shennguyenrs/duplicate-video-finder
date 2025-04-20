@@ -1,18 +1,19 @@
 import logging
 import os
+import imagehash # Import imagehash for conversion
 
 from .. import hashing
 
 
 def identify_watched_videos(
-    video_hashes_map, watched_hashes_set, hash_size, similarity_threshold
+    video_hashes_map, watched_videos_data, hash_size, similarity_threshold
 ):
     """
-    Identifies videos whose hashes match any hash in the watched set.
+    Identifies videos whose hashes match any hash stored in the watched data.
 
     Args:
         video_hashes_map (dict): {video_path: [hash_obj, ...]}.
-        watched_hashes_set (set): A set of watched hash strings.
+        watched_videos_data (dict): {video_identifier: {hash_set_str}}.
         hash_size (int): Size of the perceptual hash grid (used for comparison).
         similarity_threshold (float): Percentage (0-100).
 
@@ -27,15 +28,44 @@ def identify_watched_videos(
     count = 0
     total = len(video_hashes_map)
 
-    if not watched_hashes_set:
+    if not watched_videos_data:
         logging.info(
-            "No watched hashes provided, skipping watched video identification."
+            "Watched videos data is empty, skipping watched video identification."
         )
-        # If no watched hashes, all videos are considered unwatched
+        # If no watched data, all videos are considered unwatched
         return [], video_hashes_map
 
+    # --- Extract and convert watched hashes ---
+    # 1. Get all unique hash strings from the dictionary values (which are sets of strings)
+    all_watched_hashes_str = set().union(*watched_videos_data.values())
+
+    if not all_watched_hashes_str:
+        logging.info(
+            "No actual hash strings found within the watched videos data. Skipping identification."
+        )
+        return [], video_hashes_map
+
+    # 2. Convert string hashes to ImageHash objects for comparison
+    watched_hashes_obj_set = set()
+    try:
+        watched_hashes_obj_set = {
+            imagehash.hex_to_hash(h_str) for h_str in all_watched_hashes_str
+        }
+        logging.info(
+            f"Successfully converted {len(watched_hashes_obj_set)} unique watched hashes from strings to objects for comparison."
+        )
+    except Exception as e:
+        logging.error(
+            f"Error converting watched hashes from string to object: {e}. Skipping watched video identification.",
+            exc_info=True,
+        )
+        # If conversion fails, treat as if no watched hashes exist
+        return [], video_hashes_map
+    # --- End extraction and conversion ---
+
+
     logging.info(
-        f"Comparing {total} videos against {len(watched_hashes_set)} watched hashes..."
+        f"Comparing {total} videos against {len(watched_hashes_obj_set)} unique watched hash objects..."
     )
 
     for video_path, hashes_list in video_hashes_map.items():
@@ -44,12 +74,17 @@ def identify_watched_videos(
         if not hashes_list:  # Skip if a video somehow has no hashes
             continue
 
-        # Compare each hash of the video against each hash in the watched set
+        # Compare each hash of the video against each hash object in the watched set
         for video_hash in hashes_list:
-            for watched_hash in watched_hashes_set:
+            # Ensure video_hash is an ImageHash object (should be from calculate_all_hashes)
+            if not isinstance(video_hash, imagehash.ImageHash):
+                 logging.warning(f"Skipping non-ImageHash object found for video {video_path}")
+                 continue
+
+            for watched_hash_obj in watched_hashes_obj_set:
                 similarity = hashing.compare_hashes(
-                    [video_hash], [watched_hash], hash_size
-                )  # Compare single hash pair
+                    [video_hash], [watched_hash_obj], hash_size
+                )  # Compare single hash pair (both should be objects)
 
                 if similarity >= similarity_threshold:
                     is_watched = True
