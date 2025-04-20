@@ -23,7 +23,6 @@ def run_create_watched_db(args):
         )
     abs_db_path_to_use = os.path.abspath(db_path_to_use)
 
-    # Display settings using the utility function
     utils.display_settings(
         args,
         "Create Watched Database",
@@ -46,14 +45,13 @@ def run_create_watched_db(args):
 
         if not all_video_hashes:
             print("No video files found or processed in the source directory.")
-            return  # Exit cleanly
+            return
 
         print(
             f"Found {len(all_video_hashes)} videos to process for the watched database."
         )
         print(f"Adding/updating entries in watched database: {abs_db_path_to_use}")
 
-        # Iterate through each video and its hashes, adding them individually
         processed_count = 0
         total_videos = len(all_video_hashes)
         for video_path, hashes_list in all_video_hashes.items():
@@ -64,13 +62,11 @@ def run_create_watched_db(args):
                 )
                 continue
 
-            # Convert hash objects to a set of strings for this video
             video_hashes_set_str = {str(h) for h in hashes_list}
 
-            # Add this video's entry to the database
             watched_db_manager.add_video_to_watched_db(
                 db_path=abs_db_path_to_use,
-                video_identifier=video_path,  # Use the absolute path as identifier
+                video_identifier=video_path,
                 video_hashes_set=video_hashes_set_str,
                 num_frames=args.frames,
                 hash_size=args.hash_size,

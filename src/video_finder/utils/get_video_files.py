@@ -21,16 +21,13 @@ def get_video_files(directory, recursive=False):
     try:
         if recursive:
             logging.debug(f"Recursively scanning {directory}...")
-            # os.walk allows modifying dirnames in-place when topdown=True (default)
-            # to prevent descending into specific directories.
+            # Prevent descending into the duplicate directory
             for root, dirnames, files in os.walk(directory, topdown=True):
-                # Skip the designated duplicate directory
                 if duplicate_dir_name in dirnames:
                     logging.debug(
                         f"Skipping duplicate directory: {os.path.join(root, duplicate_dir_name)}"
                     )
                     dirnames.remove(duplicate_dir_name)
-
                 for file in files:
                     if os.path.splitext(file)[1].lower() in config.VIDEO_EXTENSIONS:
                         video_files.append(os.path.abspath(os.path.join(root, file)))
@@ -38,7 +35,6 @@ def get_video_files(directory, recursive=False):
             logging.debug(f"Scanning non-recursively: {directory}...")
             for item in os.listdir(directory):
                 item_path = os.path.join(directory, item)
-                # Check if it's a file and has a valid video extension
                 if (
                     os.path.isfile(item_path)
                     and os.path.splitext(item)[1].lower() in config.VIDEO_EXTENSIONS

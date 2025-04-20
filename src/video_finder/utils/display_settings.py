@@ -13,22 +13,21 @@ def display_settings(args, mode_name, primary_directory, db_path=None, cache_dir
     print(f"Hash size: {args.hash_size}x{args.hash_size}")
     print(f"Skip duration: {args.skip_duration} seconds")
 
-    # Cache file path display
     cache_path_display = os.path.join(cache_dir, args.cache_file + ".db")
     try:
-        # Try to make path relative for cleaner display, fallback to absolute
+        # Display relative path for readability, fallback to absolute if needed
         rel_cache_path = os.path.relpath(cache_path_display)
         print(f"Using cache file: ~{rel_cache_path}")
-    except ValueError:  # Handle cases like different drives on Windows
+    except ValueError:
         print(f"Using cache file: {cache_path_display}")
 
     print(f"Max workers: {args.workers}")
     print(f"Recursive scan: {'Enabled' if args.recursive else 'Disabled'}")
 
-    # Mode-specific settings
-    if "Find Similar" in mode_name:  # Check based on mode name convention
+    # Show mode-specific settings
+    if "Find Similar" in mode_name:
         print(f"Similarity threshold: {args.threshold}%")
-        if args.watched_db:  # Use args.watched_db directly as it's set by argparse
+        if args.watched_db:
             print(f"Using watched database: {args.watched_db}")
             print(
                 "Watched database will be updated with unique, unwatched videos found."

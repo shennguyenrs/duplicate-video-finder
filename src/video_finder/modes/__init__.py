@@ -6,4 +6,4 @@ __all__ = [
     "run_create_watched_db",
     "run_find_similar",
     "run_inspect_db",
-]  # Add to __all__
+]

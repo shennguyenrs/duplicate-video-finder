@@ -14,17 +14,17 @@ def parse_arguments():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    # --- Mode Selection (Mutually Exclusive) ---
+    # Mutually exclusive operation modes
     mode_group = parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument(
         "directory",
-        nargs="?",  # Optional because it's mutually exclusive
+        nargs="?",
         help="Standard Mode: Path to the directory containing video files to scan for duplicates/watched.",
     )
     mode_group.add_argument(
         "--create-watched-db-from",
         metavar="<source_directory>",
-        dest="create_watched_source",  # Use a distinct destination variable
+        dest="create_watched_source",
         help="Create Mode: Path to a directory whose video files should ALL be added to the watched database.",
     )
     mode_group.add_argument(
@@ -33,8 +33,7 @@ def parse_arguments():
         help="Inspect Mode: Show parameters and hash count stored in a watched database file. Does not perform scanning.",
     )
 
-    # --- Core Scan Arguments (Applicable to both modes for hashing consistency) ---
-    # Note: These are not used by --inspect-db mode but are kept separate for clarity.
+    # Core hashing options
     core_group = parser.add_argument_group(
         "Core Hashing Options (used in find/create modes)"
     )
@@ -86,7 +85,7 @@ def parse_arguments():
         help="Minimum video duration in seconds. Videos shorter than this will be skipped during hashing.",
     )
 
-    # --- Watched Videos Arguments ---
+    # Watched videos database options
     watched_group = parser.add_argument_group(
         "Watched Video Options (Standard Mode & Create Mode)"
     )
@@ -102,7 +101,7 @@ def parse_arguments():
         ),
     )
 
-    # --- General Arguments ---
+    # General options
     general_group = parser.add_argument_group("General Options")
     general_group.add_argument(
         "-v",
@@ -113,32 +112,23 @@ def parse_arguments():
 
     args = parser.parse_args()
 
-    # --- Argument Validation ---
-
-    # Mode-specific validations
-
-    # General validations (apply to both modes where relevant)
+    # Argument validation
     if not 0 <= args.threshold <= 100:
         parser.error(f"Threshold must be between 0 and 100, got {args.threshold}")
-
-    # Validate positive integers where applicable
     if args.frames <= 0:
         parser.error(f"Number of frames must be positive, got {args.frames}")
-    if (
-        args.hash_size <= 1
-    ):  # Hash size must be at least 2x2 technically, but 1 is definitely invalid
+    if args.hash_size <= 1:
         parser.error(f"Hash size must be greater than 1, got {args.hash_size}")
     if args.workers <= 0:
         parser.error(f"Number of workers must be positive, got {args.workers}")
     if args.skip_duration < 0:
         parser.error(f"Skip duration cannot be negative, got {args.skip_duration}")
 
-    # Adjust logging level if verbose flag is set
+    # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Verbose logging enabled.")
     else:
-        # Ensure default level is INFO if not verbose
         logging.getLogger().setLevel(logging.INFO)
 
     return args

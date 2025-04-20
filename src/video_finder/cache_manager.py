@@ -23,14 +23,13 @@ def load_or_check_cache(video_files, cache_path, num_frames, hash_size):
     video_hashes = {}
     videos_to_process = []
     stats = {"hits": 0, "misses": 0, "stale": 0}
-    video_files_set = set(video_files)  # For quick existence checks
+    video_files_set = set(video_files)
 
-    logging.info(f"Using cache file: {cache_path}.db")  # Shelve adds .db
+    logging.info(f"Using cache file: {cache_path}.db")
 
     try:
-        # Using 'c' flag: open for read/write, create if doesn't exist
         with shelve.open(cache_path, flag="c") as cache:
-            # --- Prune Cache ---
+            # Remove cache entries for files that no longer exist
             keys_to_delete = [k for k in cache if k not in video_files_set]
             if keys_to_delete:
                 logging.info(
@@ -51,43 +50,34 @@ def load_or_check_cache(video_files, cache_path, num_frames, hash_size):
                     f"Cache pruning complete ({deleted_count} entries removed)."
                 )
 
-            # --- Check Cache Entries ---
             for video_path in video_files:
                 try:
                     current_mtime = os.path.getmtime(video_path)
                     if video_path in cache:
                         cached_data = cache[video_path]
-                        # Validate cache entry structure and parameters
                         is_valid_entry = (
                             isinstance(cached_data, dict)
                             and cached_data.get("mtime") == current_mtime
                             and cached_data.get("num_frames") == num_frames
                             and cached_data.get("hash_size") == hash_size
-                            and isinstance(
-                                cached_data.get("hashes"), list
-                            )  # Check type
-                            and len(cached_data.get("hashes", []))
-                            == num_frames  # Check hash count
+                            and isinstance(cached_data.get("hashes"), list)
+                            and len(cached_data.get("hashes", [])) == num_frames
                         )
-
                         if is_valid_entry:
                             video_hashes[video_path] = cached_data["hashes"]
                             stats["hits"] += 1
                         else:
-                            # Cache entry is stale or invalid
                             videos_to_process.append(video_path)
                             stats["stale"] += 1
                             logging.debug(
                                 f"Cache stale/invalid for: {os.path.basename(video_path)}"
                             )
                     else:
-                        # Not in cache
                         videos_to_process.append(video_path)
                         stats["misses"] += 1
 
                 except FileNotFoundError:
                     logging.warning(f"File not found during cache check: {video_path}")
-                    # Attempt to remove from cache if it exists despite file missing
                     if video_path in cache:
                         try:
                             del cache[video_path]
@@ -100,7 +90,6 @@ def load_or_check_cache(video_files, cache_path, num_frames, hash_size):
                             )
                 except Exception as e:
                     logging.error(f"Error checking cache for {video_path}: {e}")
-                    # Assume cache is unreliable for this file, re-process
                     if video_path not in videos_to_process:
                         videos_to_process.append(video_path)
 
@@ -112,10 +101,9 @@ def load_or_check_cache(video_files, cache_path, num_frames, hash_size):
         logging.error(
             f"Failed to open or process cache file {cache_path}.db: {e}. Proceeding without cache."
         )
-        # If cache fails entirely, process all videos and reset state
-        videos_to_process = list(video_files)  # Ensure it's a list copy
+        videos_to_process = list(video_files)
         video_hashes = {}
-        stats = {"hits": 0, "misses": len(video_files), "stale": 0}  # Reset stats
+        stats = {"hits": 0, "misses": len(video_files), "stale": 0}
 
     return video_hashes, videos_to_process, stats
 
@@ -138,18 +126,15 @@ def update_cache(cache_path, newly_cached_hashes):
     )
     updated_count = 0
     try:
-        # Use 'c' flag to ensure file exists, 'w' could also work if existence is guaranteed
         with shelve.open(cache_path, flag="c") as cache:
             for video_path, data_to_cache in newly_cached_hashes.items():
                 try:
-                    # Ensure data is suitable for shelve (pickleable)
                     cache[video_path] = data_to_cache
                     updated_count += 1
                 except Exception as e:
                     logging.error(
                         f"Failed to write entry for {video_path} to cache: {e}"
                     )
-            # shelve automatically syncs on close with 'c' or 'w' in recent Python versions
         logging.info(f"Cache update complete ({updated_count} entries written).")
     except Exception as e:
         logging.error(
@@ -159,6 +144,4 @@ def update_cache(cache_path, newly_cached_hashes):
 
 def get_cache_path(directory, cache_filename):
     """Constructs the absolute path for the cache file."""
-    # Place cache inside the target directory using the provided filename
-    # Shelve will add the appropriate extension (.db, .dat, etc.)
     return os.path.abspath(os.path.join(directory, cache_filename))

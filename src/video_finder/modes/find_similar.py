@@ -4,8 +4,6 @@ import sys
 
 from .. import config, core, utils, watched_db_manager
 
-# --- Helper Functions ---
-
 
 def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
     """
@@ -19,17 +17,14 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
     """
     print("-" * 30)
     print(f"Loading watched database: {args.watched_db}")
-    # Load video data (dict) AND metadata
     watched_videos_data, db_metadata = watched_db_manager.load_watched_videos_data(
         args.watched_db
     )
 
-    # --- Parameter Validation ---
+    # Validate hashing parameters against DB metadata
     if db_metadata:
         db_frames = db_metadata.get("num_frames")
         db_hash_size = db_metadata.get("hash_size")
-
-        # Check for mismatch only if metadata values exist
         mismatch = False
         error_msg = "Error: Watched DB parameters mismatch."
         if db_frames is not None and db_frames != args.frames:
@@ -41,18 +36,14 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
 
         if mismatch:
             error_msg += "\nParameters should match for reliable comparison."
-            print(error_msg)  # Also print to console
-            logging.warning(
-                f"Watched DB parameter mismatch detected: {error_msg}"
-            )  # Log as warning initially
-
+            print(error_msg)
+            logging.warning(f"Watched DB parameter mismatch detected: {error_msg}")
             prompt_msg = (
                 f"Use parameters from the watched database instead? \n"
                 f" (DB: frames={db_frames}, hash_size={db_hash_size} | "
                 f"Current: frames={args.frames}, hash_size={args.hash_size}) [y/N]: "
             )
             confirm_use_db_params = input(prompt_msg)
-
             if confirm_use_db_params.lower() == "y":
                 print(
                     f"Proceeding with watched database parameters: frames={db_frames}, hash_size={db_hash_size}"
@@ -60,8 +51,6 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
                 logging.info(
                     f"User opted to use watched DB parameters: frames={db_frames}, hash_size={db_hash_size}"
                 )
-                # Update args IN PLACE to use the database parameters
-                # This modification will persist for the rest of the run_find_similar call
                 args.frames = db_frames
                 args.hash_size = db_hash_size
             else:
@@ -72,42 +61,32 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
                 sys.exit(1)
         else:
             logging.info("Watched DB parameters match current run parameters.")
-    elif watched_videos_data:  # Only warn if DB exists (has data) but no metadata
+    elif watched_videos_data:
         warn_msg = "Warning: Could not find hashing parameters (metadata) in the watched DB. Parameter consistency cannot be guaranteed. Ensure current settings match DB creation settings."
         logging.warning(warn_msg)
         print(warn_msg)
-    # --- End Parameter Validation ---
 
-    # Note: Conversion from string hashes to objects is now handled inside identify_watched_videos
-
-    videos_to_check_for_duplicates = all_video_hashes.copy()  # Default: check all
+    videos_to_check_for_duplicates = all_video_hashes.copy()
     watched_videos_found = []
-    moved_watched_files_set = set()  # Initialize return value
+    moved_watched_files_set = set()
 
-    # Use the loaded watched_videos_data dictionary for comparison
-    if watched_videos_data:  # Check if the dictionary has entries
+    if watched_videos_data:
         print(
             f"Comparing {len(all_video_hashes)} videos against {len(watched_videos_data)} entries in watched database..."
         )
-        # Note: identify_watched_videos uses args.hash_size and args.threshold,
-        # which might have been updated by the validation logic above.
-        # Pass the dictionary directly.
         watched_videos_found, videos_to_check_for_duplicates = (
             core.identify_watched_videos(
                 video_hashes_map=all_video_hashes,
-                watched_videos_data=watched_videos_data,  # <-- Pass the dictionary
+                watched_videos_data=watched_videos_data,
                 hash_size=args.hash_size,
                 similarity_threshold=args.threshold,
             )
         )
     else:
-        # This handles cases where DB was empty or couldn't be loaded
         print(
             "Watched database is empty or could not be loaded. Skipping watched check."
         )
-        # No change needed, videos_to_check_for_duplicates remains all_video_hashes
 
-    # Prompt to move watched videos if any were found
     if watched_videos_found:
         print("-" * 30)
         print(
@@ -118,7 +97,6 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
         )
         if confirm_watched.lower() == "y":
             print("Moving watched videos...")
-            # Note: move_watched_files returns the set of successfully moved files
             moved_count, failed_count, moved_watched_files_set = (
                 utils.move_watched_files(
                     watched_video_paths=watched_videos_found,
@@ -152,12 +130,10 @@ def _handle_duplicate_videos(args, videos_to_check, abs_target_directory):
     print(
         f"Checking for duplicates among the remaining {len(videos_to_check)} videos..."
     )
-    similar_video_groups = []  # Initialize return value
-    moved_duplicate_files_set = set()  # Initialize return value
+    similar_video_groups = []
+    moved_duplicate_files_set = set()
 
     if len(videos_to_check) >= 2:
-        # Note: find_similar_groups uses args.hash_size and args.threshold,
-        # which might have been updated by the watched DB validation logic.
         similar_video_groups = core.find_similar_groups(
             video_hashes_map=videos_to_check,
             hash_size=args.hash_size,
@@ -166,15 +142,10 @@ def _handle_duplicate_videos(args, videos_to_check, abs_target_directory):
     else:
         print("Less than two videos remaining, skipping duplicate check.")
 
-    # Print duplicate results
     utils.print_similar_video_groups(similar_video_groups)
 
-    # Prompt to move duplicates if any groups were found
     if similar_video_groups:
-        num_duplicates_to_move = sum(
-            len(group)
-            for group, _ in similar_video_groups  # Count all files in groups to be moved
-        )
+        num_duplicates_to_move = sum(len(group) for group, _ in similar_video_groups)
         if num_duplicates_to_move > 0:
             print("-" * 30)
             print(
@@ -193,16 +164,10 @@ def _handle_duplicate_videos(args, videos_to_check, abs_target_directory):
                 print(
                     f"Finished moving duplicates: {moved_count} file(s) moved, {failed_count} failed."
                 )
-                # Record which files were intended to be moved (all files in the groups)
-                # We assume if the user confirmed, all files in the groups were *attempted* to be moved.
                 for group_set, _ in similar_video_groups:
                     moved_duplicate_files_set.update(group_set)
             else:
                 print("Move operation for duplicates cancelled by user.")
-                # moved_duplicate_files_set remains empty if cancelled
-        # No else needed here, print_similar_video_groups already handles the "no groups found" message.
-    # No else needed: moved_duplicate_files_set is already initialized if no groups found
-
     print("-" * 30)
     return similar_video_groups, moved_duplicate_files_set
 
@@ -224,14 +189,8 @@ def _update_watched_database(
     print("-" * 30)
     print(f"Updating watched database: {args.watched_db}")
 
-    # Identify the final set of unique, unwatched videos that were NOT moved
-    # Start with videos that were candidates for duplicate checking
     final_unique_paths = set(videos_to_check.keys())
-
-    # Remove any that were successfully moved as watched (shouldn't be many/any if logic is correct, but be safe)
     final_unique_paths -= moved_watched_files
-
-    # Remove any that were part of duplicate groups the user agreed to move
     final_unique_paths -= moved_duplicate_files
 
     if not final_unique_paths:
@@ -242,20 +201,13 @@ def _update_watched_database(
 
         added_count = 0
         for video_path in final_unique_paths:
-            # Get the list of hash objects for this video from the map passed in
             hashes_list = videos_to_check.get(video_path)
-
             if hashes_list:
-                # Convert hash objects to a set of strings for storage
                 video_hashes_set_str = {str(h) for h in hashes_list}
-
-                if video_hashes_set_str:  # Ensure we have hashes before adding
-                    # Add this video's entry to the database
-                    # Note: args.frames and args.hash_size reflect the effective parameters used
-                    # for this run (potentially updated from DB).
+                if video_hashes_set_str:
                     watched_db_manager.add_video_to_watched_db(
                         db_path=args.watched_db,
-                        video_identifier=video_path,  # Use the absolute path as identifier
+                        video_identifier=video_path,
                         video_hashes_set=video_hashes_set_str,
                         num_frames=args.frames,
                         hash_size=args.hash_size,
@@ -266,7 +218,6 @@ def _update_watched_database(
                         f"Hash list for video '{video_path}' resulted in an empty string set. Not adding to DB."
                     )
             else:
-                # This case should ideally not happen if videos_to_check is correct
                 logging.warning(
                     f"Could not find hashes for final unique video intended for DB update: {video_path}"
                 )
@@ -278,9 +229,6 @@ def _update_watched_database(
     print("-" * 30)
 
 
-# --- Main Function ---
-
-
 def run_find_similar(args):
     """Handles the logic for finding similar and watched videos."""
     target_directory = args.directory
@@ -288,11 +236,8 @@ def run_find_similar(args):
 
     if not os.path.isdir(abs_target_directory):
         logging.error(f"Error: Directory not found: {abs_target_directory}")
-        sys.exit(1)  # Exit if directory is invalid
+        sys.exit(1)
 
-    # Display settings using the utility function
-    # Note: db_path is implicitly handled by args.watched_db inside display_settings
-    # Cache is stored relative to the target directory here
     utils.display_settings(
         args,
         "Find Similar/Watched Videos",
@@ -300,9 +245,7 @@ def run_find_similar(args):
         cache_dir=abs_target_directory,
     )
 
-    # --- Main Processing Logic ---
     try:
-        # Step 1: Calculate Hashes for all videos
         all_video_hashes = core.calculate_all_hashes(
             directory=abs_target_directory,
             recursive=args.recursive,
@@ -315,36 +258,25 @@ def run_find_similar(args):
 
         if not all_video_hashes:
             print("No video files found or processed. Exiting.")
-            return  # Exit if no hashes were generated
+            return
 
-        # Initialize variables for the workflow - these will be managed by helpers
-        # videos_to_check_for_duplicates will be returned by _handle_watched_videos
-        # moved_watched_files will be returned by _handle_watched_videos
-        # moved_duplicate_files will be returned by _handle_duplicate_videos
-        # similar_video_groups will be returned by _handle_duplicate_videos
-
-        # Step 2: Handle Watched Videos (if --watched-db is provided)
         if args.watched_db:
             videos_to_check_for_duplicates, moved_watched_files = (
                 _handle_watched_videos(args, all_video_hashes, abs_target_directory)
             )
         else:
-            # If not using watched_db, check all videos for duplicates
             videos_to_check_for_duplicates = all_video_hashes.copy()
-            moved_watched_files = set()  # No watched files moved
+            moved_watched_files = set()
 
-        # Step 3: Handle Duplicates (among remaining videos)
-        # Initialize moved_duplicate_files before the call
         moved_duplicate_files = set()
         similar_video_groups, moved_duplicate_files = _handle_duplicate_videos(
             args, videos_to_check_for_duplicates, abs_target_directory
         )
 
-        # Step 4: Update Watched DB (if --watched-db was provided)
         if args.watched_db:
             _update_watched_database(
                 args,
-                videos_to_check_for_duplicates,  # Videos remaining *before* duplicate check
+                videos_to_check_for_duplicates,
                 moved_watched_files,
                 moved_duplicate_files,
             )
@@ -356,4 +288,4 @@ def run_find_similar(args):
         print(
             "\nAn error occurred. Please check the logs or run with -v for more details."
         )
-        sys.exit(1)  # Exit with error code
+        sys.exit(1)

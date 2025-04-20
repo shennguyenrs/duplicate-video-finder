@@ -30,9 +30,7 @@ def find_similar_groups(video_hashes_map, hash_size, similarity_threshold):
         return []
 
     total_comparisons = len(valid_videos) * (len(valid_videos) - 1) // 2
-    if (
-        total_comparisons == 0 and len(valid_videos) == 2
-    ):  # Handle case with exactly 2 valid videos
+    if total_comparisons == 0 and len(valid_videos) == 2:
         total_comparisons = 1
     elif total_comparisons == 0:
         logging.info("No pairs to compare.")
@@ -42,22 +40,19 @@ def find_similar_groups(video_hashes_map, hash_size, similarity_threshold):
     similar_pairs_with_scores = []
     compared_count = 0
 
-    # Iterate through all unique pairs of videos with valid hashes
+    # Compare all unique pairs of videos
     for video1, video2 in itertools.combinations(valid_videos, 2):
-        # Hashes should exist, but double-check defensively
         if video1 not in video_hashes_map or video2 not in video_hashes_map:
             logging.warning(
                 f"Missing hashes for comparison pair (should not happen): {os.path.basename(video1)}, {os.path.basename(video2)}"
             )
-            continue  # Skip this pair
+            continue
 
         hashes1 = video_hashes_map[video1]
         hashes2 = video_hashes_map[video2]
 
-        # Perform the comparison using the hashing utility function
         similarity = hashing.compare_hashes(hashes1, hashes2, hash_size=hash_size)
 
-        # If similarity meets the threshold, record the pair and its score
         if similarity >= similarity_threshold:
             similar_pairs_with_scores.append((video1, video2, similarity))
             logging.debug(
@@ -65,7 +60,6 @@ def find_similar_groups(video_hashes_map, hash_size, similarity_threshold):
             )
 
         compared_count += 1
-        # Log comparison progress periodically
         if compared_count % 1000 == 0 or compared_count == total_comparisons:
             logging.info(f"Compared {compared_count}/{total_comparisons} pairs...")
 
@@ -77,12 +71,12 @@ def find_similar_groups(video_hashes_map, hash_size, similarity_threshold):
         logging.info("No similar pairs found.")
         return []
 
-    # --- Group Similar Videos ---
+    # Group similar videos based on similar pairs
     grouped_videos_with_similarity = utils.group_similar_items(
         similar_pairs_with_scores
     )
 
-    # --- Sort Groups by Average Similarity (Descending) ---
+    # Sort groups by average similarity (descending)
     grouped_videos_with_similarity.sort(key=lambda x: x[1], reverse=True)
 
     logging.info(

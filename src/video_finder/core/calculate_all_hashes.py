@@ -40,28 +40,22 @@ def calculate_all_hashes(
         logging.info("No video files found in the specified directory.")
         return {}
 
-    # --- Step 1: Load Cache & Determine Videos to Process ---
+    # Load cache and determine which videos need processing
     cache_path = cache_manager.get_cache_path(directory, cache_filename)
     video_hashes, videos_to_process, _ = cache_manager.load_or_check_cache(
         video_files, cache_path, num_frames, hash_size
     )
-    # video_hashes dict now contains hashes loaded from cache
 
-    # --- Step 2: Calculate Hashes for Videos Needing Processing ---
     processed_count = 0
-    newly_cached_hashes = (
-        {}
-    )  # Store hashes calculated in this run before writing to cache
+    newly_cached_hashes = {}
 
     if videos_to_process:
         logging.info(
             f"Calculating hashes for {len(videos_to_process)} videos using {max_workers} workers..."
         )
         futures = {}
-        # Use ThreadPoolExecutor for parallel hash calculation
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for video_path in videos_to_process:
-                # Submit the hashing task
                 future = executor.submit(
                     hashing.calculate_video_hashes,
                     video_path,
@@ -69,22 +63,15 @@ def calculate_all_hashes(
                     hash_size,
                     skip_duration,
                 )
-                futures[future] = video_path  # Map future back to video path
+                futures[future] = video_path
 
-            # Process completed futures as they finish
             for future in as_completed(futures):
                 processed_count += 1
                 video_path = futures[future]
                 try:
-                    # Get the result (list of hashes or None/[])
                     hashes = future.result()
-
-                    # Check if successful and got the expected number of hashes
                     if hashes is not None and len(hashes) == num_frames:
-                        video_hashes[video_path] = (
-                            hashes  # Add successful results to main dict
-                        )
-                        # Prepare data for caching
+                        video_hashes[video_path] = hashes
                         try:
                             current_mtime = os.path.getmtime(video_path)
                             newly_cached_hashes[video_path] = {
@@ -101,23 +88,19 @@ def calculate_all_hashes(
                             logging.error(
                                 f"Error getting mtime for caching {video_path}: {e}"
                             )
-                    # Log failures or unexpected results from hashing function
                     elif hashes is None:
                         logging.warning(
                             f"Failed to calculate hashes for {os.path.basename(video_path)} (returned None)."
                         )
-                    else:  # Includes empty list [] or wrong count
+                    else:
                         logging.warning(
                             f"Incorrect number/failed hash calculation for {os.path.basename(video_path)}. Skipping."
                         )
-
                 except Exception as e:
-                    # Catch exceptions during future.result() or processing
                     logging.error(
                         f"Exception retrieving result for {os.path.basename(video_path)}: {e}"
                     )
 
-                # Log progress periodically
                 if processed_count % 50 == 0 or processed_count == len(
                     videos_to_process
                 ):
@@ -127,7 +110,7 @@ def calculate_all_hashes(
     else:
         logging.info("No new videos needed hash calculation (all loaded from cache).")
 
-    # --- Step 3: Update Cache (after processing finishes) ---
+    # Update cache after processing
     if newly_cached_hashes:
         cache_manager.update_cache(cache_path, newly_cached_hashes)
 

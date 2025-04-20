@@ -5,7 +5,9 @@ import shutil
 from .. import config
 
 
-def move_duplicate_files(groups, base_directory, duplicate_subdir=config.DEFAULT_DUPLICATE_DIR_NAME):
+def move_duplicate_files(
+    groups, base_directory, duplicate_subdir=config.DEFAULT_DUPLICATE_DIR_NAME
+):
     """
     Moves duplicate files into a specified subdirectory.
 
@@ -16,48 +18,41 @@ def move_duplicate_files(groups, base_directory, duplicate_subdir=config.DEFAULT
         duplicate_subdir (str): Name of the subdirectory to move duplicates into.
 
     Returns:
-        tuple: A tuple containing (number_of_files_moved, number_of_failures).
+        tuple: (number_of_files_moved, number_of_failures)
     """
     duplicate_dir_path = os.path.join(base_directory, duplicate_subdir)
     moved_count = 0
     failed_count = 0
 
-    # Create the duplicate directory if it doesn't exist
     try:
         os.makedirs(duplicate_dir_path, exist_ok=True)
         logging.info(f"Ensured duplicate directory exists: {duplicate_dir_path}")
     except OSError as e:
         logging.error(f"Failed to create directory {duplicate_dir_path}: {e}")
         print(f"Error: Could not create directory {duplicate_dir_path}. Aborting move.")
-        return 0, sum(
-            len(g[0]) - 1 for g in groups if len(g[0]) > 1
-        )  # All potential moves fail
+        return 0, sum(len(g[0]) - 1 for g in groups if len(g[0]) > 1)
 
     for group, avg_similarity in groups:
         if len(group) < 2:
-            continue  # Should not happen based on grouping logic, but check
+            continue
 
-        # Sort group alphabetically by path for deterministic processing order
         sorted_group = sorted(list(group))
         logging.info(
             f"Processing group with {len(group)} files (Avg Sim: {avg_similarity:.2f}%) for moving."
         )
 
-        # Iterate over ALL files in the group to move them
         for file_path in sorted_group:
             base_name = os.path.basename(file_path)
             dest_path = os.path.join(duplicate_dir_path, base_name)
 
-            # Handle potential filename collisions in the destination directory
+            # Ensure unique destination filename if collision occurs
             counter = 1
-            original_dest_path = (
-                dest_path  # Store original for logging clarity if renamed
-            )
+            original_dest_path = dest_path
             while os.path.exists(dest_path):
                 name, ext = os.path.splitext(base_name)
                 dest_path = os.path.join(duplicate_dir_path, f"{name}_{counter}{ext}")
                 counter += 1
-                if counter > 100:  # Safety break to prevent infinite loop
+                if counter > 100:
                     logging.error(
                         f"Failed to find unique name for {base_name} in {duplicate_dir_path} after 100 attempts."
                     )
@@ -65,21 +60,15 @@ def move_duplicate_files(groups, base_directory, duplicate_subdir=config.DEFAULT
                         f"  Error: Could not find a unique name for '{base_name}' in '{duplicate_subdir}'. Skipping move."
                     )
                     failed_count += 1
-                    # Break inner while loop, go to next file_path
                     break
-            # If the inner loop broke due to the safety break, skip the move for this file
-            if counter > 100 and os.path.exists(
-                dest_path
-            ):  # Check condition that caused break
+            if counter > 100 and os.path.exists(dest_path):
                 continue
 
-            # Log if the name was changed
             if dest_path != original_dest_path:
                 logging.info(
                     f"Destination file '{base_name}' exists. Renaming to '{os.path.basename(dest_path)}'."
                 )
 
-            # Perform the move
             try:
                 logging.debug(f"Attempting to move '{file_path}' to '{dest_path}'")
                 shutil.move(file_path, dest_path)

@@ -1,4 +1,3 @@
-# Expose functions from the utils submodules
 from .get_video_files import get_video_files
 from .group_similar_items import group_similar_items
 from .human_readable_size import human_readable_size
@@ -7,7 +6,6 @@ from .move_watched_files import move_watched_files
 from .print_similar_video_groups import print_similar_video_groups
 from .display_settings import display_settings
 
-# Optionally define __all__ to control `from .utils import *` behavior
 __all__ = [
     "get_video_files",
     "group_similar_items",
