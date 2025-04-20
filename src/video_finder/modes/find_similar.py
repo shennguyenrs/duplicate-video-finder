@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import imagehash
 
 from .. import config, core, utils, watched_db_manager
 
@@ -20,8 +21,10 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
     print("-" * 30)
     print(f"Loading watched database: {args.watched_db}")
     # Load hashes AND metadata
-    watched_hashes_set, db_metadata = watched_db_manager.load_watched_hashes(
-        args.watched_db
+    watched_hashes_str_set, db_metadata = (
+        watched_db_manager.load_watched_hashes(  # Renamed variable for clarity
+            args.watched_db
+        )
     )
 
     # --- Parameter Validation ---
@@ -72,33 +75,54 @@ def _handle_watched_videos(args, all_video_hashes, abs_target_directory):
                 sys.exit(1)
         else:
             logging.info("Watched DB parameters match current run parameters.")
-    elif watched_hashes_set:  # Only warn if DB exists but has no metadata
+    elif watched_hashes_str_set:  # Only warn if DB exists but has no metadata
         warn_msg = "Warning: Could not find hashing parameters (metadata) in the watched DB. Parameter consistency cannot be guaranteed. Ensure current settings match DB creation settings."
         logging.warning(warn_msg)
         print(warn_msg)
     # --- End Parameter Validation ---
 
+    # Convert loaded string hashes to ImageHash objects
+    watched_hashes_obj_set = set()  # New set for hash objects
+    if watched_hashes_str_set:
+        try:
+            # Assuming hashes are stored as hex strings
+            watched_hashes_obj_set = {
+                imagehash.hex_to_hash(h_str) for h_str in watched_hashes_str_set
+            }
+            logging.info(
+                f"Successfully converted {len(watched_hashes_obj_set)} watched hashes from strings to objects."
+            )
+        except Exception as e:
+            logging.error(
+                f"Error converting watched hashes from string to object: {e}. Proceeding with empty watched set.",
+                exc_info=True,
+            )
+            # Keep watched_hashes_obj_set empty if conversion fails
+            watched_hashes_obj_set = set()  # Ensure it's an empty set on error
+
     videos_to_check_for_duplicates = all_video_hashes.copy()  # Default: check all
     watched_videos_found = []
     moved_watched_files_set = set()  # Initialize return value
 
-    if watched_hashes_set:
+    # Use the set of hash OBJECTS for comparison now
+    if watched_hashes_obj_set:  # Check the object set
         print(
-            f"Comparing {len(all_video_hashes)} videos against {len(watched_hashes_set)} watched hashes..."
+            f"Comparing {len(all_video_hashes)} videos against {len(watched_hashes_obj_set)} watched hashes..."
         )
         # Note: identify_watched_videos uses args.hash_size and args.threshold,
         # which might have been updated by the validation logic above.
         watched_videos_found, videos_to_check_for_duplicates = (
             core.identify_watched_videos(
                 video_hashes_map=all_video_hashes,
-                watched_hashes_set=watched_hashes_set,
+                watched_hashes_set=watched_hashes_obj_set,  # <-- Pass the object set
                 hash_size=args.hash_size,
                 similarity_threshold=args.threshold,
             )
         )
     else:
+        # This handles cases where DB was empty, couldn't be loaded, or conversion failed
         print(
-            "Watched database is empty or could not be loaded. Skipping watched check."
+            "Watched database is empty, could not be loaded, or hash conversion failed. Skipping watched check."
         )
         # No change needed, videos_to_check_for_duplicates remains all_video_hashes
 
