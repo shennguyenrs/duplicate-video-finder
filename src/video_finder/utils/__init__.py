@@ -5,6 +5,7 @@ from .human_readable_size import human_readable_size
 from .move_duplicate_files import move_duplicate_files
 from .move_watched_files import move_watched_files
 from .print_similar_video_groups import print_similar_video_groups
+from .display_settings import display_settings
 
 # Optionally define __all__ to control `from .utils import *` behavior
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "move_duplicate_files",
     "move_watched_files",
     "print_similar_video_groups",
+    "display_settings",
 ]

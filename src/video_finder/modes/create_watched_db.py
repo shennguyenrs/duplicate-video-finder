@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 
-from .. import config, core, watched_db_manager
+from .. import config, core, utils, watched_db_manager
 
 
 def run_create_watched_db(args):
@@ -23,17 +23,14 @@ def run_create_watched_db(args):
         )
     abs_db_path_to_use = os.path.abspath(db_path_to_use)
 
-    print("-" * 30)
-    print("Mode: Create Watched Database")
-    print(f"Scanning source directory: '{abs_source_directory}'")
-    print(f"Frames sampled per video: {args.frames}")
-    print(f"Hash size: {args.hash_size}x{args.hash_size}")
-    print(f"Skip duration: {args.skip_duration} seconds")
-    cache_path_display = os.path.join(abs_source_directory, args.cache_file + ".db")
-    print(f"Using cache file: ~{os.path.relpath(cache_path_display)}")
-    print(f"Max workers: {args.workers}")
-    print(f"Recursive scan: {'Enabled' if args.recursive else 'Disabled'}")
-    print("-" * 30)
+    # Display settings using the utility function
+    utils.display_settings(
+        args,
+        "Create Watched Database",
+        abs_source_directory,
+        db_path=abs_db_path_to_use,
+        cache_dir=abs_source_directory,
+    )
 
     try:
         # Calculate hashes for all videos in the source directory
