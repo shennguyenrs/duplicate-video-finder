@@ -3,6 +3,7 @@ import os
 import imagehash
 
 from .. import hashing
+from ..utils.bktree import BKTree
 
 
 def identify_watched_videos(
@@ -43,32 +44,40 @@ def identify_watched_videos(
         )
         return [], video_hashes_map
 
-    # Convert string hashes to ImageHash objects for comparison
+    # Convert string hashes to ImageHash objects and build BK-Tree
     try:
         watched_hashes_obj_set = {
             imagehash.hex_to_hash(h_str) for h_str in all_watched_hashes_str
         }
         logging.info(
-            f"Successfully converted {len(watched_hashes_obj_set)} unique watched hashes from strings to objects for comparison."
+            f"Successfully converted {len(watched_hashes_obj_set)} unique watched hashes from strings to objects."
         )
+
+        # Build BK-Tree with Hamming distance metric
+        watched_bktree = BKTree(distance_func=lambda h1, h2: h1 - h2)
+        for h in watched_hashes_obj_set:
+            watched_bktree.add(h)
+        logging.info("Built BK-Tree for efficient hash searching")
+
     except Exception as e:
         logging.error(
-            f"Error converting watched hashes from string to object: {e}. Skipping watched video identification.",
+            f"Error initializing watched hashes: {e}. Skipping video identification.",
             exc_info=True,
         )
         return [], video_hashes_map
 
     logging.info(
-        f"Comparing {total} videos against {len(watched_hashes_obj_set)} unique watched hash objects..."
+        f"Analyzing {total} videos using BK-Tree with {len(watched_hashes_obj_set)} hashes..."
     )
 
     for video_path, hashes_list in video_hashes_map.items():
         count += 1
-        is_watched = False
         if not hashes_list:
             continue
 
-        # Compare each hash of the video against watched hashes
+        best_match_distances = []
+        hash_len_bits = hash_size * hash_size
+
         for video_hash in hashes_list:
             if not isinstance(video_hash, imagehash.ImageHash):
                 logging.warning(
@@ -76,21 +85,37 @@ def identify_watched_videos(
                 )
                 continue
 
-            for watched_hash_obj in watched_hashes_obj_set:
-                similarity = hashing.compare_hashes(
-                    [video_hash], [watched_hash_obj], hash_size
-                )
-                if similarity >= similarity_threshold:
-                    is_watched = True
-                    logging.debug(
-                        f"Video '{os.path.basename(video_path)}' matched watched hash. Similarity: {similarity:.2f}%"
-                    )
-                    break
-            if is_watched:
-                break
+            # BK-Tree nearest neighbor search
+            min_dist = hash_len_bits  # Init with max possible distance
+            if watched_bktree.root is not None:
+                queue = [watched_bktree.root]
+                while queue:
+                    node = queue.pop(0)
+                    current_dist = watched_bktree.distance_func(video_hash, node.item)
+                    if current_dist < min_dist:
+                        min_dist = current_dist
 
-        if is_watched:
+                    # Explore children that could have closer matches
+                    lower_bound = current_dist - min_dist
+                    upper_bound = current_dist + min_dist
+                    for d in list(node.children.keys()):
+                        if lower_bound <= d <= upper_bound:
+                            queue.append(node.children[d])
+
+            best_match_distances.append(min_dist)
+
+        if not best_match_distances:
+            continue
+
+        # Calculate overall similarity
+        avg_distance = sum(best_match_distances) / len(best_match_distances)
+        similarity = max(0.0, (hash_len_bits - avg_distance) / hash_len_bits) * 100
+
+        if similarity >= similarity_threshold:
             watched_paths.append(video_path)
+            logging.debug(
+                f"Video '{os.path.basename(video_path)}' matched watched (Similarity: {similarity:.2f}%)"
+            )
         else:
             unwatched_hashes[video_path] = hashes_list
 
