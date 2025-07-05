@@ -37,6 +37,20 @@ def calculate_video_hashes(
             cap.release()
             return []
 
+        # Check if the last frame is readable to validate video integrity early
+        last_frame_index = total_frames - 1
+        if last_frame_index > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, last_frame_index)
+            ret, _ = cap.read()
+            if not ret:
+                logging.warning(
+                    f"Could not read the last frame ({last_frame_index}) from {video_path}. Skipping."
+                )
+                cap.release()
+                return None
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
         frame_hashes = []
         indices = np.linspace(0, max(0, total_frames - 1), num_frames, dtype=int)
 
@@ -57,13 +71,13 @@ def calculate_video_hashes(
 
         if not frame_hashes:
             logging.warning(f"No frames could be processed for: {video_path}")
-            return []
+            return None
 
         if len(frame_hashes) != num_frames:
             logging.warning(
                 f"Expected {num_frames} hashes but got {len(frame_hashes)} for {video_path}. Discarding result."
             )
-            return []
+            return None
 
         return frame_hashes
 

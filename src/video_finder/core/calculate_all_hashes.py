@@ -92,6 +92,10 @@ def calculate_all_hashes(
                         logging.warning(
                             f"Failed to calculate hashes for {os.path.basename(video_path)} (returned None)."
                         )
+                    elif not hashes:
+                        logging.info(
+                            f"Skipped hashing for {os.path.basename(video_path)}"
+                        )
                     else:
                         logging.warning(
                             f"Incorrect number/failed hash calculation for {os.path.basename(video_path)}. Skipping."
