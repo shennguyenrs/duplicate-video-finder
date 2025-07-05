@@ -2,7 +2,6 @@ import logging
 import os
 import imagehash
 
-from .. import hashing
 from ..utils.bktree import BKTree
 
 
