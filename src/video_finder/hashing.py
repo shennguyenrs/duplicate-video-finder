@@ -44,7 +44,10 @@ def calculate_video_hashes(
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if ret:
-                img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                resized_frame = cv2.resize(
+                    frame, (32, 32), interpolation=cv2.INTER_AREA
+                )
+                img = Image.fromarray(cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB))
                 h = imagehash.average_hash(img, hash_size=hash_size)
                 frame_hashes.append(h)
             else:
