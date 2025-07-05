@@ -18,6 +18,8 @@ def get_video_files(directory, recursive=False):
     """
     video_files = []
     duplicate_dir_name = config.DEFAULT_DUPLICATE_DIR_NAME
+    watched_dir_name = config.DEFAULT_WATCHED_DIR_NAME
+    skipped_dir_name = config.DEFAULT_SKIPPED_DIR_NAME
     try:
         if recursive:
             logging.debug(f"Recursively scanning {directory}...")
@@ -28,6 +30,16 @@ def get_video_files(directory, recursive=False):
                         f"Skipping duplicate directory: {os.path.join(root, duplicate_dir_name)}"
                     )
                     dirnames.remove(duplicate_dir_name)
+                if watched_dir_name in dirnames:
+                    logging.debug(
+                        f"Skipping watched directory: {os.path.join(root, watched_dir_name)}"
+                    )
+                    dirnames.remove(watched_dir_name)
+                if skipped_dir_name in dirnames:
+                    logging.debug(
+                        f"Skipping skipped directory: {os.path.join(root, skipped_dir_name)}"
+                    )
+                    dirnames.remove(skipped_dir_name)
                 for file in files:
                     if os.path.splitext(file)[1].lower() in config.VIDEO_EXTENSIONS:
                         video_files.append(os.path.abspath(os.path.join(root, file)))

@@ -172,6 +172,41 @@ def _handle_duplicate_videos(args, videos_to_check, abs_target_directory):
     return similar_video_groups, moved_duplicate_files_set
 
 
+def _handle_skipped_videos(args, skipped_during_hashing, abs_target_directory):
+    """
+    Handles moving videos that were skipped during the hashing process.
+
+    Args:
+        args: Command line arguments.
+        skipped_during_hashing (set): A set of absolute paths for videos that were
+                                      skipped by the hashing function.
+        abs_target_directory (str): The absolute path to the target directory.
+    """
+    if not skipped_during_hashing:
+        return
+
+    print("-" * 30)
+    print(
+        f"Found {len(skipped_during_hashing)} video(s) that were skipped during hashing (e.g., too short, corrupted)."
+    )
+    confirm_skipped = input(
+        f"Proceed with moving these skipped videos to '{config.DEFAULT_SKIPPED_DIR_NAME}' subdirectory? [Y/n]: "
+    )
+    if confirm_skipped.lower() != "n":
+        print("Moving skipped videos...")
+        moved_count, failed_count, _ = utils.move_skipped_files(
+            skipped_video_paths=list(skipped_during_hashing),
+            base_directory=abs_target_directory,
+            skipped_subdir=config.DEFAULT_SKIPPED_DIR_NAME,
+        )
+        print(
+            f"Finished moving skipped videos: {moved_count} moved, {failed_count} failed."
+        )
+    else:
+        print("Move operation for skipped videos cancelled by user.")
+    print("-" * 30)
+
+
 def _update_watched_database(
     args, videos_to_check, moved_watched_files, moved_duplicate_files
 ):
@@ -246,7 +281,7 @@ def run_find_similar(args):
     )
 
     try:
-        all_video_hashes = core.calculate_all_hashes(
+        all_video_hashes, skipped_during_hashing = core.calculate_all_hashes(
             directory=abs_target_directory,
             recursive=args.recursive,
             cache_filename=args.cache_file,
@@ -258,6 +293,10 @@ def run_find_similar(args):
 
         if not all_video_hashes:
             print("No video files found or processed. Exiting.")
+            if skipped_during_hashing:
+                _handle_skipped_videos(
+                    args, skipped_during_hashing, abs_target_directory
+                )
             return
 
         if args.watched_db:
@@ -271,6 +310,12 @@ def run_find_similar(args):
         moved_duplicate_files = set()
         similar_video_groups, moved_duplicate_files = _handle_duplicate_videos(
             args, videos_to_check_for_duplicates, abs_target_directory
+        )
+
+        _handle_skipped_videos(
+            args,
+            skipped_during_hashing,
+            abs_target_directory,
         )
 
         if args.watched_db:

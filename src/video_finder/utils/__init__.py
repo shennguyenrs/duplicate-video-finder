@@ -5,6 +5,7 @@ from .move_duplicate_files import move_duplicate_files
 from .move_watched_files import move_watched_files
 from .print_similar_video_groups import print_similar_video_groups
 from .display_settings import display_settings
+from .move_skipped_files import move_skipped_files
 
 __all__ = [
     "get_video_files",
@@ -14,4 +15,5 @@ __all__ = [
     "move_watched_files",
     "print_similar_video_groups",
     "display_settings",
+    "move_skipped_files",
 ]
