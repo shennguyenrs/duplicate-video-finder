@@ -152,9 +152,9 @@ def _handle_duplicate_videos(args, videos_to_check, abs_target_directory):
                 f"Found {num_duplicates_to_move} file(s) across {len(similar_video_groups)} duplicate groups."
             )
             confirm_duplicates = input(
-                f"Proceed with moving ALL files in these groups to '{config.DEFAULT_DUPLICATE_DIR_NAME}' subdirectory? [y/N]: "
+                f"Proceed with moving ALL files in these groups to '{config.DEFAULT_DUPLICATE_DIR_NAME}' subdirectory? [Y/n]: "
             )
-            if confirm_duplicates.lower() == "y":
+            if confirm_duplicates.lower() != "n":
                 print("Moving duplicates...")
                 moved_count, failed_count = utils.move_duplicate_files(
                     groups=similar_video_groups,
